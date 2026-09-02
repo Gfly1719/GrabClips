@@ -1,1 +1,46 @@
-import React from 'react'\nimport { Link, useNavigate, useLocation } from 'react-router-dom'\nimport '../styles/Navigation.css'\n\nconst Navigation = () => {\n  const navigate = useNavigate()\n  const location = useLocation()\n  const user = JSON.parse(localStorage.getItem('user'))\n\n  const handleLogout = () => {\n    localStorage.removeItem('token')\n    localStorage.removeItem('user')\n    navigate('/login')\n  }\n\n  const isActive = (path) => location.pathname === path\n\n  return (\n    <nav className=\"navigation\">\n      <div className=\"nav-container\">\n        <Link to=\"/feed\" className=\"nav-logo\">\n          🎬 GrabClips\n        </Link>\n        \n        <div className=\"nav-menu\">\n          <Link\n            to=\"/feed\"\n            className={`nav-item ${isActive('/feed') ? 'active' : ''}`}\n          >\n            <span>🏠</span> Feed\n          </Link>\n          \n          <Link\n            to=\"/live\"\n            className={`nav-item ${isActive('/live') ? 'active' : ''}`}\n          >\n            <span>🔴</span> Live\n          </Link>\n          \n          <Link\n            to=\"/messages\"\n            className={`nav-item ${isActive('/messages') ? 'active' : ''}`}\n          >\n            <span>💬</span> Messages\n          </Link>\n          \n          <Link\n            to={`/profile/${user?.id}`}\n            className={`nav-item ${isActive(`/profile/${user?.id}`) ? 'active' : ''}`}\n          >\n            <span>👤</span> Profile\n          </Link>\n        </div>\n\n        <button className=\"btn-logout\" onClick={handleLogout}>\n          Logout\n        </button>\n      </div>\n    </nav>\n  )\n}\n\nexport default Navigation\n"
+import { Link, useNavigate } from 'react-router-dom'
+import '../styles/Navigation.css'
+
+function Navigation({ user }) {
+  const navigate = useNavigate()
+
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    window.location.href = '/login'
+  }
+
+  return (
+    <nav className="navbar">
+      <div className="nav-container">
+        <Link to="/feed" className="nav-logo">
+          🎬 GrabClips
+        </Link>
+
+        <div className="nav-menu">
+          <Link to="/feed" className="nav-link">
+            🏠 Feed
+          </Link>
+          <Link to="/live" className="nav-link">
+            🔴 Live
+          </Link>
+          <Link to="/go-live" className="nav-link">
+            📹 Go Live
+          </Link>
+          <Link to="/messages" className="nav-link">
+            💬 Messages
+          </Link>
+          <Link to={`/profile/${user?.id}`} className="nav-link">
+            👤 Profile
+          </Link>
+        </div>
+
+        <button onClick={handleLogout} className="btn-logout">
+          Logout
+        </button>
+      </div>
+    </nav>
+  )
+}
+
+export default Navigation

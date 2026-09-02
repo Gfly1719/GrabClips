@@ -1,1 +1,57 @@
-import React, { useState, useEffect } from 'react'\nimport '../styles/ChatWindow.css'\n\nconst ChatWindow = ({ conversation }) => {\n  const [messages, setMessages] = useState(conversation.messages || [])\n  const [newMessage, setNewMessage] = useState('')\n  const [loading, setLoading] = useState(false)\n\n  const handleSendMessage = async (e) => {\n    e.preventDefault()\n    if (!newMessage.trim()) return\n\n    setLoading(true)\n    try {\n      const token = localStorage.getItem('token')\n      const response = await fetch(`/api/messages/${conversation.id}`, {\n        method: 'POST',\n        headers: {\n          'Content-Type': 'application/json',\n          'Authorization': `Bearer ${token}`\n        },\n        body: JSON.stringify({ text: newMessage })\n      })\n\n      if (response.ok) {\n        const message = await response.json()\n        setMessages([...messages, message])\n        setNewMessage('')\n      }\n    } catch (error) {\n      console.error('Error sending message:', error)\n    } finally {\n      setLoading(false)\n    }\n  }\n\n  return (\n    <div className=\"chat-window\">\n      <div className=\"chat-header\">\n        <img src={conversation.otherUser.profilePicture || 'https://via.placeholder.com/40'} alt=\"\" />\n        <h2>{conversation.otherUser.username}</h2>\n      </div>\n\n      <div className=\"messages-list\">\n        {messages.map(msg => (\n          <div key={msg.id} className={`message ${msg.senderId === conversation.currentUserId ? 'sent' : 'received'}`}>\n            <p>{msg.text}</p>\n            <span className=\"time\">{new Date(msg.createdAt).toLocaleTimeString()}</span>\n          </div>\n        ))}\n      </div>\n\n      <form className=\"message-input-form\" onSubmit={handleSendMessage}>\n        <input\n          type=\"text\"\n          value={newMessage}\n          onChange={(e) => setNewMessage(e.target.value)}\n          placeholder=\"Type a message...\"\n          disabled={loading}\n        />\n        <button type=\"submit\" disabled={loading || !newMessage.trim()}>\n          Send\n        </button>\n      </form>\n    </div>\n  )\n}\n\nexport default ChatWindow\n"
+import { useState, useEffect } from 'react'
+import '../styles/ChatWindow.css'
+
+function ChatWindow({ conversation, currentUser, onSendMessage }) {
+  const [message, setMessage] = useState('')
+  const [messages, setMessages] = useState(conversation.messages || [])
+
+  useEffect(() => {
+    setMessages(conversation.messages || [])
+  }, [conversation])
+
+  const handleSend = () => {
+    if (!message.trim()) return
+
+    onSendMessage(message)
+    setMessages([...messages, {
+      id: Date.now().toString(),
+      senderId: currentUser.id,
+      recipientId: conversation.id,
+      text: message,
+      createdAt: new Date()
+    }])
+    setMessage('')
+  }
+
+  return (
+    <div className="chat-window">
+      <div className="chat-header">
+        <img src={conversation.otherUser.profilePicture} alt={conversation.otherUser.username} />
+        <h2>{conversation.otherUser.username}</h2>
+      </div>
+
+      <div className="messages-list">
+        {messages.map((msg) => (
+          <div key={msg.id} className={`message ${msg.senderId === currentUser.id ? 'sent' : 'received'}`}>
+            <p>{msg.text}</p>
+            <div className="time">{new Date(msg.createdAt).toLocaleTimeString()}</div>
+          </div>
+        ))}
+      </div>
+
+      <form className="message-input-form" onSubmit={(e) => { e.preventDefault(); handleSend() }}>
+        <input
+          type="text"
+          placeholder="Type a message..."
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+        />
+        <button type="submit" disabled={!message.trim()}>
+          Send
+        </button>
+      </form>
+    </div>
+  )
+}
+
+export default ChatWindow

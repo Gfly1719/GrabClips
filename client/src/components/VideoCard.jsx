@@ -1,1 +1,96 @@
-import React, { useState } from 'react'\nimport '../styles/VideoCard.css'\n\nconst VideoCard = ({ video, onLike, currentUserId }) => {\n  const [likes, setLikes] = useState(video.likes || 0)\n  const [isLiked, setIsLiked] = useState(video.isLiked || false)\n  const [showComments, setShowComments] = useState(false)\n  const [comments, setComments] = useState(video.comments || [])\n  const [newComment, setNewComment] = useState('')\n\n  const handleLike = () => {\n    if (!isLiked) {\n      setLikes(likes + 1)\n    } else {\n      setLikes(likes - 1)\n    }\n    setIsLiked(!isLiked)\n    onLike(video.id, !isLiked)\n  }\n\n  const handleAddComment = async () => {\n    if (!newComment.trim()) return\n\n    try {\n      const token = localStorage.getItem('token')\n      const response = await fetch(`/api/videos/${video.id}/comments`, {\n        method: 'POST',\n        headers: {\n          'Content-Type': 'application/json',\n          'Authorization': `Bearer ${token}`\n        },\n        body: JSON.stringify({ text: newComment })\n      })\n\n      if (response.ok) {\n        const newCommentData = await response.json()\n        setComments([...comments, newCommentData])\n        setNewComment('')\n      }\n    } catch (error) {\n      console.error('Error adding comment:', error)\n    }\n  }\n\n  const handleShare = () => {\n    if (navigator.share) {\n      navigator.share({\n        title: 'Check out this video on GrabClips!',\n        text: video.caption,\n        url: window.location.href\n      })\n    } else {\n      alert('Share via: ' + video.caption)\n    }\n  }\n\n  return (\n    <div className=\"video-card\">\n      <video\n        src={video.videoUrl || 'https://via.placeholder.com/300x500'}\n        className=\"video-player\"\n        controls\n      />\n      \n      <div className=\"video-overlay\">\n        <div className=\"video-info\">\n          <div className=\"user-info\">\n            <img src={video.creator.profilePicture || 'https://via.placeholder.com/40'} alt=\"\" className=\"avatar\" />\n            <div>\n              <p className=\"username\">{video.creator.username}</p>\n              <p className=\"caption\">{video.caption}</p>\n            </div>\n          </div>\n        </div>\n\n        <div className=\"video-actions\">\n          <button className={`action-btn ${isLiked ? 'liked' : ''}`} onClick={handleLike}>\n            <span className=\"icon\">❤️</span>\n            <span className=\"count\">{likes}</span>\n          </button>\n\n          <button className=\"action-btn\" onClick={() => setShowComments(!showComments)}>\n            <span className=\"icon\">💬</span>\n            <span className=\"count\">{comments.length}</span>\n          </button>\n\n          <button className=\"action-btn\" onClick={handleShare}>\n            <span className=\"icon\">📤</span>\n            <span className=\"count\">Share</span>\n          </button>\n        </div>\n      </div>\n\n      {showComments && (\n        <div className=\"comments-section\">\n          <div className=\"comments-list\">\n            {comments.map(comment => (\n              <div key={comment.id} className=\"comment\">\n                <p><strong>{comment.user.username}</strong> {comment.text}</p>\n              </div>\n            ))}\n          </div>\n          <div className=\"comment-input\">\n            <input\n              type=\"text\"\n              value={newComment}\n              onChange={(e) => setNewComment(e.target.value)}\n              placeholder=\"Add a comment...\"\n            />\n            <button onClick={handleAddComment}>Post</button>\n          </div>\n        </div>\n      )}\n    </div>\n  )\n}\n\nexport default VideoCard\n"
+import { useState } from 'react'
+import { likeVideo, commentOnVideo } from '../services/api'
+import '../styles/VideoCard.css'
+
+function VideoCard({ video }) {
+  const [likes, setLikes] = useState(video.likes?.length || 0)
+  const [comments, setComments] = useState(video.comments || [])
+  const [showComments, setShowComments] = useState(false)
+  const [commentText, setCommentText] = useState('')
+  const [isLiked, setIsLiked] = useState(false)
+
+  const handleLike = async () => {
+    try {
+      const response = await likeVideo(video.id)
+      setLikes(response.data.likes)
+      setIsLiked(!isLiked)
+    } catch (err) {
+      console.error('Failed to like video:', err)
+    }
+  }
+
+  const handleComment = async () => {
+    if (!commentText.trim()) return
+
+    try {
+      await commentOnVideo(video.id, commentText)
+      setCommentText('')
+      setComments([...comments, { text: commentText, user: { username: 'You' } }])
+    } catch (err) {
+      console.error('Failed to comment:', err)
+    }
+  }
+
+  return (
+    <div className="video-card">
+      <video
+        className="video-player"
+        src={video.videoUrl}
+        controls
+        autoPlay
+        loop
+        muted
+      />
+
+      <div className="video-overlay">
+        <div className="video-info">
+          <div className="user-info">
+            <img src={video.creator.profilePicture} alt={video.creator.username} className="avatar" />
+            <div>
+              <p className="username">@{video.creator.username}</p>
+              <p className="caption">{video.title}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="video-actions">
+        <button className="action-btn" onClick={handleLike}>
+          <span className="icon">❤️</span>
+          <span className="count">{likes}</span>
+        </button>
+        <button className="action-btn" onClick={() => setShowComments(!showComments)}>
+          <span className="icon">💬</span>
+          <span className="count">{comments.length}</span>
+        </button>
+        <button className="action-btn">
+          <span className="icon">📤</span>
+          <span className="count">0</span>
+        </button>
+      </div>
+
+      {showComments && (
+        <div className="comments-section">
+          <div className="comments-list">
+            {comments.map((comment, index) => (
+              <div key={index} className="comment">
+                <p><strong>{comment.user.username}:</strong> {comment.text}</p>
+              </div>
+            ))}
+          </div>
+          <div className="comment-input">
+            <input
+              type="text"
+              placeholder="Add a comment..."
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+            />
+            <button onClick={handleComment}>Post</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default VideoCard

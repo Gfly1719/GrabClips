@@ -1,1 +1,25 @@
-import React from 'react'\nimport '../styles/LiveStreamCard.css'\n\nconst LiveStreamCard = ({ stream, onWatch }) => {\n  return (\n    <div className=\"live-stream-card\" onClick={() => onWatch(stream.id)}>\n      <div className=\"stream-thumbnail\">\n        <img src={stream.thumbnail || 'https://via.placeholder.com/300x200'} alt=\"Stream\" />\n        <div className=\"live-badge\">\n          <span className=\"pulse\">🔴</span>\n          <span>LIVE</span>\n        </div>\n        <div className=\"viewer-count\">\n          👁️ {stream.viewerCount || 0}\n        </div>\n      </div>\n      <div className=\"stream-info\">\n        <h3>{stream.title}</h3>\n        <p className=\"streamer-name\">{stream.streamer.username}</p>\n        <p className=\"description\">{stream.description}</p>\n      </div>\n    </div>\n  )\n}\n\nexport default LiveStreamCard\n"
+import { useNavigate } from 'react-router-dom'
+import '../styles/LiveStreamCard.css'
+
+function LiveStreamCard({ stream }) {
+  const navigate = useNavigate()
+
+  return (
+    <div className="live-stream-card" onClick={() => navigate(`/stream/${stream.id}`)}>
+      <div className="stream-thumbnail">
+        <img src={stream.thumbnail} alt={stream.title} />
+        <div className="live-badge">
+          <span className="pulse">●</span> LIVE
+        </div>
+        <div className="viewer-count">👥 {stream.viewerCount} watching</div>
+      </div>
+      <div className="stream-info">
+        <h3>{stream.title}</h3>
+        <p className="streamer-name">by {stream.streamer.username}</p>
+        <p className="description">{stream.description}</p>
+      </div>
+    </div>
+  )
+}
+
+export default LiveStreamCard
