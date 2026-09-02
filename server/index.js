@@ -1,1 +1,218 @@
-const express = require('express');\nconst cors = require('cors');\nconst jwt = require('jsonwebtoken');\nconst bcrypt = require('bcryptjs');\nrequire('dotenv').config();\n\nconst app = express();\n\napp.use(cors());\napp.use(express.json());\n\nconst JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_jwt_key';\n\nconst users = [];\nconst videos = [];\nconst streams = [];\nconst messages = [];\n\nconst authenticateToken = (req, res, next) => {\n  const authHeader = req.headers['authorization'];\n  const token = authHeader && authHeader.split(' ')[1];\n\n  if (!token) return res.sendStatus(401);\n\n  jwt.verify(token, JWT_SECRET, (err, user) => {\n    if (err) return res.sendStatus(403);\n    req.user = user;\n    next();\n  });\n};\n\napp.post('/api/auth/signup', async (req, res) => {\n  const { username, email, phoneNumber, password } = req.body;\n\n  if (!username || !(email || phoneNumber) || !password) {\n    return res.status(400).json({ message: 'Missing required fields' });\n  }\n\n  const existingUser = users.find(u => u.email === email || u.phoneNumber === phoneNumber);\n  if (existingUser) {\n    return res.status(409).json({ message: 'User already exists' });\n  }\n\n  const hashedPassword = await bcrypt.hash(password, 10);\n  const user = {\n    id: Date.now().toString(),\n    username,\n    email,\n    phoneNumber,\n    password: hashedPassword,\n    profilePicture: 'https://via.placeholder.com/100',\n    bio: '',\n    followers: [],\n    following: [],\n    createdAt: new Date()\n  };\n\n  users.push(user);\n\n  const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET);\n  res.json({ token, user: { id: user.id, username: user.username, email: user.email } });\n});\n\napp.post('/api/auth/login', async (req, res) => {\n  const { email, phoneNumber, password } = req.body;\n\n  if (!(email || phoneNumber) || !password) {\n    return res.status(400).json({ message: 'Email/Phone and password required' });\n  }\n\n  const user = users.find(u => u.email === email || u.phoneNumber === phoneNumber);\n  if (!user) {\n    return res.status(401).json({ message: 'Invalid credentials' });\n  }\n\n  const validPassword = await bcrypt.compare(password, user.password);\n  if (!validPassword) {\n    return res.status(401).json({ message: 'Invalid credentials' });\n  }\n\n  const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET);\n  res.json({ token, user: { id: user.id, username: user.username, email: user.email } });\n});\n\napp.get('/api/users/:userId', authenticateToken, (req, res) => {\n  const user = users.find(u => u.id === req.params.userId);\n  if (!user) return res.status(404).json({ message: 'User not found' });\n\n  const userVideos = videos.filter(v => v.creatorId === user.id);\n  res.json({\n    id: user.id,\n    username: user.username,\n    profilePicture: user.profilePicture,\n    bio: user.bio,\n    followers: user.followers.length,\n    following: user.following.length,\n    videos: userVideos\n  });\n});\n\napp.post('/api/users/:userId/follow', authenticateToken, (req, res) => {\n  const targetUser = users.find(u => u.id === req.params.userId);\n  const currentUser = users.find(u => u.id === req.user.id);\n\n  if (!targetUser || !currentUser) return res.status(404).json({ message: 'User not found' });\n\n  if (currentUser.following.includes(req.params.userId)) {\n    currentUser.following = currentUser.following.filter(id => id !== req.params.userId);\n    targetUser.followers = targetUser.followers.filter(id => id !== req.user.id);\n  } else {\n    currentUser.following.push(req.params.userId);\n    targetUser.followers.push(req.user.id);\n  }\n\n  res.json({ message: 'Follow status updated' });\n});\n\napp.get('/api/videos/feed', authenticateToken, (req, res) => {\n  const currentUser = users.find(u => u.id === req.user.id);\n  const feedVideos = videos.filter(v => \n    currentUser.following.includes(v.creatorId) || v.creatorId === req.user.id\n  );\n  res.json(feedVideos);\n});\n\napp.post('/api/videos/:videoId/like', authenticateToken, (req, res) => {\n  const video = videos.find(v => v.id === req.params.videoId);\n  if (!video) return res.status(404).json({ message: 'Video not found' });\n\n  if (video.likes.includes(req.user.id)) {\n    video.likes = video.likes.filter(id => id !== req.user.id);\n  } else {\n    video.likes.push(req.user.id);\n  }\n\n  res.json({ likes: video.likes.length });\n});\n\napp.post('/api/videos/:videoId/comments', authenticateToken, (req, res) => {\n  const { text } = req.body;\n  const video = videos.find(v => v.id === req.params.videoId);\n  if (!video) return res.status(404).json({ message: 'Video not found' });\n\n  const user = users.find(u => u.id === req.user.id);\n  const comment = {\n    id: Date.now().toString(),\n    text,\n    user: { id: user.id, username: user.username },\n    createdAt: new Date()\n  };\n\n  video.comments.push(comment);\n  res.json(comment);\n});\n\napp.post('/api/streams/start', authenticateToken, (req, res) => {\n  const { title, description } = req.body;\n  const user = users.find(u => u.id === req.user.id);\n\n  const stream = {\n    id: Date.now().toString(),\n    title,\n    description,\n    streamer: { id: user.id, username: user.username, profilePicture: user.profilePicture },\n    isLive: true,\n    viewerCount: 0,\n    startedAt: new Date(),\n    thumbnail: 'https://via.placeholder.com/300x200'\n  };\n\n  streams.push(stream);\n  res.json(stream);\n});\n\napp.get('/api/streams/live', authenticateToken, (req, res) => {\n  const liveStreams = streams.filter(s => s.isLive);\n  res.json(liveStreams);\n});\n\napp.post('/api/streams/stop', authenticateToken, (req, res) => {\n  const stream = streams.find(s => s.streamer.id === req.user.id && s.isLive);\n  if (!stream) return res.status(404).json({ message: 'No active stream' });\n\n  stream.isLive = false;\n  stream.endedAt = new Date();\n  res.json(stream);\n});\n\napp.get('/api/messages/conversations', authenticateToken, (req, res) => {\n  const userMessages = messages.filter(m => m.senderId === req.user.id || m.recipientId === req.user.id);\n  const conversations = [];\n\n  userMessages.forEach(msg => {\n    const otherUserId = msg.senderId === req.user.id ? msg.recipientId : msg.senderId;\n    if (!conversations.find(c => c.id === otherUserId)) {\n      const otherUser = users.find(u => u.id === otherUserId);\n      conversations.push({\n        id: otherUserId,\n        otherUser: { id: otherUser.id, username: otherUser.username, profilePicture: otherUser.profilePicture },\n        lastMessage: msg.text,\n        messages: userMessages.filter(m => (m.senderId === req.user.id && m.recipientId === otherUserId) || (m.senderId === otherUserId && m.recipientId === req.user.id))\n      });\n    }\n  });\n\n  res.json(conversations);\n});\n\napp.post('/api/messages/:conversationId', authenticateToken, (req, res) => {\n  const { text } = req.body;\n\n  const message = {\n    id: Date.now().toString(),\n    senderId: req.user.id,\n    recipientId: req.params.conversationId,\n    text,\n    createdAt: new Date()\n  };\n\n  messages.push(message);\n  res.json(message);\n});\n\napp.get('/api/health', (req, res) => {\n  res.json({ status: 'ok' });\n});\n\nconst PORT = process.env.PORT || 5000;\napp.listen(PORT, () => {\n  console.log(`GrabClips server running on port ${PORT}`);\n});\n
+const express = require('express');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+require('dotenv').config();
+
+const app = express();
+
+// Middleware
+app.use(cors({
+  origin: [process.env.FRONTEND_URL || 'http://localhost:5173'],
+  credentials: true
+}));
+app.use(express.json());
+
+const PORT = process.env.PORT || 5000;
+const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_jwt_key_change_this_in_production';
+
+// Mock database
+const users = [];
+const videos = [];
+const streams = [];
+const conversations = [];
+const messages = [];
+
+// Auth Middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) return res.sendStatus(401);
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
+
+// =====================
+// AUTH ROUTES
+// =====================
+
+app.post('/api/auth/signup', async (req, res) => {
+  const { username, email, phoneNumber, password } = req.body;
+
+  if (!username || !password || (!email && !phoneNumber)) {
+    return res.status(400).json({ message: 'Missing required fields' });
+  }
+
+  const existingUser = users.find(u => u.email === email || u.phoneNumber === phoneNumber);
+  if (existingUser) {
+    return res.status(409).json({ message: 'User already exists' });
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const user = {
+    id: Date.now().toString(),
+    username,
+    email,
+    phoneNumber,
+    password: hashedPassword,
+    profilePicture: 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + username,
+    bio: '',
+    followers: 0,
+    following: 0,
+    videos: [],
+    createdAt: new Date()
+  };
+
+  users.push(user);
+
+  const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET);
+  res.status(201).json({ token, user: { ...user, password: undefined } });
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const { email, phoneNumber, password } = req.body;
+
+  if (!password || (!email && !phoneNumber)) {
+    return res.status(400).json({ message: 'Missing required fields' });
+  }
+
+  const user = users.find(u => u.email === email || u.phoneNumber === phoneNumber);
+  if (!user) {
+    return res.status(401).json({ message: 'Invalid credentials' });
+  }
+
+  const passwordMatch = await bcrypt.compare(password, user.password);
+  if (!passwordMatch) {
+    return res.status(401).json({ message: 'Invalid credentials' });
+  }
+
+  const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET);
+  res.json({ token, user: { ...user, password: undefined } });
+});
+
+// =====================
+// USER ROUTES
+// =====================
+
+app.get('/api/users/:userId', authenticateToken, (req, res) => {
+  const user = users.find(u => u.id === req.params.userId);
+  if (!user) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+  res.json({ ...user, password: undefined });
+});
+
+app.post('/api/users/:userId/follow', authenticateToken, (req, res) => {
+  const targetUser = users.find(u => u.id === req.params.userId);
+  if (!targetUser) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+  targetUser.followers += 1;
+  res.json({ message: 'Followed successfully' });
+});
+
+// =====================
+// VIDEO ROUTES
+// =====================
+
+app.get('/api/videos/feed', authenticateToken, (req, res) => {
+  res.json(videos);
+});
+
+app.post('/api/videos/:videoId/like', authenticateToken, (req, res) => {
+  const video = videos.find(v => v.id === req.params.videoId);
+  if (!video) {
+    return res.status(404).json({ message: 'Video not found' });
+  }
+  video.likes = (video.likes || 0) + 1;
+  res.json({ likes: video.likes });
+});
+
+app.post('/api/videos/:videoId/comments', authenticateToken, (req, res) => {
+  const { text } = req.body;
+  const video = videos.find(v => v.id === req.params.videoId);
+  if (!video) {
+    return res.status(404).json({ message: 'Video not found' });
+  }
+  const comment = { id: Date.now().toString(), userId: req.user.id, text, createdAt: new Date() };
+  video.comments = video.comments || [];
+  video.comments.push(comment);
+  res.status(201).json(comment);
+});
+
+// =====================
+// STREAM ROUTES
+// =====================
+
+app.post('/api/streams/start', authenticateToken, (req, res) => {
+  const { title, description } = req.body;
+  const stream = {
+    id: Date.now().toString(),
+    creatorId: req.user.id,
+    title,
+    description,
+    viewerCount: 0,
+    thumbnail: 'https://via.placeholder.com/300x400?text=' + encodeURIComponent(title),
+    createdAt: new Date()
+  };
+  streams.push(stream);
+  res.status(201).json(stream);
+});
+
+app.get('/api/streams/live', authenticateToken, (req, res) => {
+  res.json(streams);
+});
+
+app.post('/api/streams/stop', authenticateToken, (req, res) => {
+  const index = streams.findIndex(s => s.creatorId === req.user.id);
+  if (index === -1) {
+    return res.status(404).json({ message: 'Stream not found' });
+  }
+  streams.splice(index, 1);
+  res.json({ message: 'Stream stopped' });
+});
+
+// =====================
+// MESSAGE ROUTES
+// =====================
+
+app.get('/api/messages/conversations', authenticateToken, (req, res) => {
+  const userConversations = conversations.filter(c => c.participantIds.includes(req.user.id));
+  res.json(userConversations);
+});
+
+app.post('/api/messages/:conversationId', authenticateToken, (req, res) => {
+  const { text } = req.body;
+  const message = {
+    id: Date.now().toString(),
+    conversationId: req.params.conversationId,
+    senderId: req.user.id,
+    text,
+    createdAt: new Date()
+  };
+  messages.push(message);
+  res.status(201).json(message);
+});
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', message: 'GrabClips API is running!' });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ message: 'Internal server error' });
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 GrabClips Server running on port ${PORT}`);
+  console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+});
+
+module.exports = app;

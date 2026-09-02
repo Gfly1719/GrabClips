@@ -1,25 +1,26 @@
 {
   "name": "grabclips",
   "version": "1.0.0",
-  "description": "A modern mobile-friendly short-video social app",
-  "type": "module",
+  "description": "Short video social media app like TikTok",
+  "main": "server/index.js",
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "node server/index.js",
-    "client": "cd client && npm run dev",
-    "build": "cd client && npm run build"
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
+    "server:dev": "cd server && npm run dev",
+    "client:dev": "cd client && npm run dev",
+    "install-all": "npm install && cd server && npm install && cd ../client && npm install",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm start",
+    "server:start": "cd server && npm start"
   },
-  "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.1.0",
-    "multer": "^1.4.5-lts.1",
-    "uuid": "^9.0.0"
-  },
+  "keywords": [
+    "social",
+    "video",
+    "streaming",
+    "tiktok"
+  ],
+  "author": "Gfly1719",
+  "license": "MIT",
   "devDependencies": {
-    "concurrently": "^8.2.1",
-    "nodemon": "^3.0.1"
+    "concurrently": "^8.0.0"
   }
 }
